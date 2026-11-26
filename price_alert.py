@@ -39,7 +39,7 @@ CODE = os.environ.get("CODE", "6098")
 INTERVAL = int(os.environ.get("INTERVAL_MIN", "5"))
 NTFY_SERVER = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
 SESSIONS = [((9, 0), (11, 30)), ((12, 30), (15, 30))]  # TSE, JST
-LEAD = timedelta(minutes=45)  # a run only waits for a session starting within this window
+LEAD = timedelta(minutes=60)  # a run only waits for a session starting within this window
 UA = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -223,7 +223,7 @@ def main():
         return
     marks = session_marks(now_jst())
     if not marks:
-        print("No trading session now or within the next 45 min.", flush=True)
+        print("No trading session now or within the next 60 min.", flush=True)
         return
     print(f"Alerting {len(marks)} times, {marks[0]:%H:%M}-{marks[-1]:%H:%M} JST", flush=True)
     for mark in marks:

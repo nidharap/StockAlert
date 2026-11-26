@@ -2,13 +2,20 @@ name: 6098 real-time price alert
 
 on:
   schedule:
+    # Main starts come from an external scheduler calling workflow_dispatch at 08:20 and
+    # 12:05 JST, because GitHub's own cron often skips new repos. These are only a backup.
     # GitHub cron is UTC (JST = UTC+9). Each run starts a bit before a TSE session and
-    # the script itself fires alerts exactly on every 5-minute mark until the session ends.
+    # the script itself fires alerts exactly every INTERVAL_MIN minutes until the session ends.
     - cron: "37 23 * * 0-4"   # 08:37 JST Mon-Fri -> morning session 09:00-11:30
     - cron: "52 23 * * 0-4"   # 08:52 JST backup in case GitHub drops the run above
     - cron: "7 3 * * 1-5"     # 12:07 JST Mon-Fri -> afternoon session 12:30-15:30
     - cron: "22 3 * * 1-5"    # 12:22 JST backup
-  workflow_dispatch: # "Run workflow" button: sends one alert now, then covers the session if one is on
+  workflow_dispatch: # "Run workflow" button, also used by the external scheduler
+    inputs:
+      now:
+        description: "Send one alert immediately"
+        type: boolean
+        default: true
 
 concurrency:
   group: price-alert       # only one run at a time; a backup that finds its session done just exits
@@ -55,4 +62,4 @@ jobs:
         if: steps.expiry.outputs.expired != 'true'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        run: python3 -u price_alert.py ${{ github.event_name == 'workflow_dispatch' && '--now' || '' }}
+        run: python3 -u price_alert.py ${{ inputs.now && '--now' || '' }}
