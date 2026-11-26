@@ -1,0 +1,54 @@
+name: 6098.T price alert
+
+on:
+  schedule:
+    # GitHub cron is in UTC. Tokyo (JST) = UTC+9.
+    # TSE sessions: 09:00-11:30 and 12:30-15:30 JST = 00:00-02:30 and 03:30-06:30 UTC, Mon-Fri.
+    - cron: "*/5 0-1 * * 1-5"                  # 09:00-10:55 JST
+    - cron: "0,5,10,15,20,25,30 2 * * 1-5"     # 11:00-11:30 JST
+    - cron: "30,35,40,45,50,55 3 * * 1-5"      # 12:30-12:55 JST
+    - cron: "*/5 4-5 * * 1-5"                  # 13:00-14:55 JST
+    - cron: "0,5,10,15,20,25,30 6 * * 1-5"     # 15:00-15:30 JST
+  workflow_dispatch: # adds a "Run workflow" button for testing
+
+permissions:
+  actions: write   # lets the job switch itself off after END_DATE
+  contents: read
+
+env:
+  END_DATE: "2026-12-02"   # last Tokyo date to send alerts; the next run switches the workflow off
+  TICKER: "6098.T"
+  # ALERT_ABOVE: "10000"   # optional: urgent alert at/above this price
+  # ALERT_BELOW: "8000"    # optional: urgent alert at/below this price
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check end date
+        id: expiry
+        run: |
+          today=$(TZ=Asia/Tokyo date +%F)
+          if [[ "$today" > "$END_DATE" ]]; then
+            echo "expired=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: End date passed - notify and switch off
+        if: steps.expiry.outputs.expired == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          curl -s -H "Title: $TICKER alerts ended" \
+            -d "End date $END_DATE passed. The workflow has switched itself off." \
+            "https://ntfy.sh/$NTFY_TOPIC"
+          gh workflow disable "$GITHUB_WORKFLOW" --repo "$GITHUB_REPOSITORY"
+
+      - name: Send price
+        if: steps.expiry.outputs.expired != 'true'
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python3 price_alert.py
