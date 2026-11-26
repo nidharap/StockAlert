@@ -2,8 +2,8 @@ name: 6098 real-time price alert
 
 on:
   schedule:
-    # Main starts come from an external scheduler calling workflow_dispatch at 08:20 and
-    # 12:05 JST, because GitHub's own cron often skips new repos. These are only a backup.
+    # Main starts come from an external scheduler calling workflow_dispatch at 08:10 and
+    # 12:10 JST, because GitHub's own cron often skips new repos. These are only a backup.
     # GitHub cron is UTC (JST = UTC+9). Each run starts a bit before a TSE session and
     # the script itself fires alerts exactly every INTERVAL_MIN minutes until the session ends.
     - cron: "37 23 * * 0-4"   # 08:37 JST Mon-Fri -> morning session 09:00-11:30
