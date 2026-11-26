@@ -1,15 +1,18 @@
-name: 6098.T price alert
+name: 6098 real-time price alert
 
 on:
   schedule:
-    # GitHub cron is in UTC. Tokyo (JST) = UTC+9.
-    # TSE sessions: 09:00-11:30 and 12:30-15:30 JST = 00:00-02:30 and 03:30-06:30 UTC, Mon-Fri.
-    - cron: "*/5 0-1 * * 1-5"                  # 09:00-10:55 JST
-    - cron: "0,5,10,15,20,25,30 2 * * 1-5"     # 11:00-11:30 JST
-    - cron: "30,35,40,45,50,55 3 * * 1-5"      # 12:30-12:55 JST
-    - cron: "*/5 4-5 * * 1-5"                  # 13:00-14:55 JST
-    - cron: "0,5,10,15,20,25,30 6 * * 1-5"     # 15:00-15:30 JST
-  workflow_dispatch: # adds a "Run workflow" button for testing
+    # GitHub cron is UTC (JST = UTC+9). Each run starts a bit before a TSE session and
+    # the script itself fires alerts exactly on every 5-minute mark until the session ends.
+    - cron: "37 23 * * 0-4"   # 08:37 JST Mon-Fri -> morning session 09:00-11:30
+    - cron: "52 23 * * 0-4"   # 08:52 JST backup in case GitHub drops the run above
+    - cron: "7 3 * * 1-5"     # 12:07 JST Mon-Fri -> afternoon session 12:30-15:30
+    - cron: "22 3 * * 1-5"    # 12:22 JST backup
+  workflow_dispatch: # "Run workflow" button: sends one alert now, then covers the session if one is on
+
+concurrency:
+  group: price-alert       # only one run at a time; a backup that finds its session done just exits
+  cancel-in-progress: false
 
 permissions:
   actions: write   # lets the job switch itself off after END_DATE
@@ -17,14 +20,15 @@ permissions:
 
 env:
   END_DATE: "2026-12-02"   # last Tokyo date to send alerts; the next run switches the workflow off
-  TICKER: "6098.T"
-  # ALERT_ABOVE: "10000"   # optional: urgent alert at/above this price
-  # ALERT_BELOW: "8000"    # optional: urgent alert at/below this price
+  CODE: "6098"
+  INTERVAL_MIN: "5"
+  # ALERT_ABOVE: "18000"   # optional: urgent alert at/above this price
+  # ALERT_BELOW: "16500"   # optional: urgent alert at/below this price
 
 jobs:
   alert:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v5
 
@@ -42,13 +46,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
-          curl -s -H "Title: $TICKER alerts ended" \
+          curl -s -H "Title: $CODE alerts ended" \
             -d "End date $END_DATE passed. The workflow has switched itself off." \
             "https://ntfy.sh/$NTFY_TOPIC"
           gh workflow disable "$GITHUB_WORKFLOW" --repo "$GITHUB_REPOSITORY"
 
-      - name: Send price
+      - name: Send alerts
         if: steps.expiry.outputs.expired != 'true'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        run: python3 price_alert.py
+        run: python3 -u price_alert.py ${{ github.event_name == 'workflow_dispatch' && '--now' || '' }}
